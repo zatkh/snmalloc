@@ -691,8 +691,8 @@ namespace snmalloc
       }
     };
 
-    SlabList small_classes[NUM_SMALL_CLASSES];
-    DLList<Mediumslab> medium_classes[NUM_MEDIUM_CLASSES];
+    ModArray<NUM_SMALL_CLASSES, SlabList> small_classes;
+    ModArray<NUM_MEDIUM_CLASSES, DLList<Mediumslab>> medium_classes;
 
     DLList<Superslab> super_available;
     DLList<Superslab> super_only_short_available;
