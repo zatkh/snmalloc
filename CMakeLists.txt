@@ -6,8 +6,6 @@ option(USE_MEASURE "Measure performance with histograms" OFF)
 option(EXPOSE_EXTERNAL_PAGEMAP "Expose the global pagemap" OFF)
 option(EXPOSE_EXTERNAL_RESERVE "Expose an interface to reserve memory using the default memory provider" OFF)
 
-set(CACHE_FRIENDLY_OFFSET OFF CACHE STRING "Base offset to place linked-list nodes.")
-
 # Provide as macro so other projects can reuse
 macro(warnings_high)
   if(MSVC)
@@ -89,10 +87,6 @@ if(NOT DEFINED SNMALLOC_ONLY_HEADER_LIBRARY)
     target_link_libraries(${name} snmalloc_lib)
     target_compile_definitions(${name} PRIVATE "SNMALLOC_EXPORT=__attribute__((visibility(\"default\")))")
     set_target_properties(${name} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-
-    if(CACHE_FRIENDLY_OFFSET)
-      target_compile_definitions(${name} PRIVATE -DCACHE_FRIENDLY_OFFSET=${CACHE_FRIENDLY_OFFSET})
-    endif()
 
     if(EXPOSE_EXTERNAL_PAGEMAP)
       target_compile_definitions(${name} PRIVATE -DSNMALLOC_EXPOSE_PAGEMAP)

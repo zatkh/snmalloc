@@ -703,26 +703,6 @@ namespace snmalloc
     std::conditional_t<IsQueueInline, RemoteAllocator, RemoteAllocator*>
       remote_alloc;
 
-#ifdef CACHE_FRIENDLY_OFFSET
-    size_t remote_offset = 0;
-
-    void* apply_cache_friendly_offset(void* p, uint8_t sizeclass)
-    {
-      size_t mask = sizeclass_to_cache_friendly_mask(sizeclass);
-
-      size_t offset = remote_offset & mask;
-      remote_offset += CACHE_FRIENDLY_OFFSET;
-
-      return (void*)((uintptr_t)p + offset);
-    }
-#else
-    void* apply_cache_friendly_offset(void* p, uint8_t sizeclass)
-    {
-      UNUSED(sizeclass);
-      return p;
-    }
-#endif
-
     auto* public_state()
     {
       if constexpr (IsQueueInline)
@@ -823,7 +803,7 @@ namespace snmalloc
           Metaslab& meta = super->get_meta(slab);
           if (p->target_id() == id())
           {
-            small_dealloc_offseted(super, p, meta.sizeclass);
+            small_dealloc(super, p, meta.sizeclass);
           }
           else
           {
@@ -837,8 +817,7 @@ namespace snmalloc
           if (p->target_id() == id())
           {
             uint8_t sizeclass = slab->get_sizeclass();
-            void* start = remove_cache_friendly_offset(p, sizeclass);
-            medium_dealloc(slab, start, sizeclass);
+            medium_dealloc(slab, p, sizeclass);
           }
           else
           {
@@ -1017,18 +996,11 @@ namespace snmalloc
       }
 #endif
 
-      void* offseted = apply_cache_friendly_offset(p, sizeclass);
-      small_dealloc_offseted(super, offseted, sizeclass);
-    }
-
-    void small_dealloc_offseted(Superslab* super, void* p, uint8_t sizeclass)
-    {
       MEASURE_TIME(small_dealloc, 4, 16);
       stats().sizeclass_dealloc(sizeclass);
 
       bool was_full = super->is_full();
       SlabList* sc = &small_classes[sizeclass];
-      Slab* slab = Slab::get(p);
       Superslab::Action a =
         slab->dealloc(sc, super, p, large_allocator.memory_provider);
       if (a == Superslab::NoSlabReturn)
@@ -1233,10 +1205,8 @@ namespace snmalloc
     {
       MEASURE_TIME(remote_dealloc, 4, 16);
 
-      void* offseted = apply_cache_friendly_offset(p, sizeclass);
-
       stats().remote_free(sizeclass);
-      remote.dealloc(target->id(), offseted, sizeclass);
+      remote.dealloc(target->id(), p, sizeclass);
 
       if (remote.size < REMOTE_CACHE)
         return;

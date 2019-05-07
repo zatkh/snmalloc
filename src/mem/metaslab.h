@@ -104,8 +104,7 @@ namespace snmalloc
       size_t offset = get_slab_offset(sizeclass, is_short);
       size_t all_high_bits = ~static_cast<size_t>(1);
 
-      size_t head_start =
-        remove_cache_friendly_offset(head & all_high_bits, sizeclass);
+      size_t head_start = head & all_high_bits;
       size_t slab_start = offset & all_high_bits;
 
       return ((head_start - slab_start) % size) == 0;
@@ -135,7 +134,7 @@ namespace snmalloc
       while ((curr & 1) != 1)
       {
         // Check we are looking at a correctly aligned block
-        uint16_t start = remove_cache_friendly_offset(curr, sizeclass);
+        uint16_t start = curr;
         assert((start - offset) % size == 0);
 
         // Account for free elements in free list
@@ -151,7 +150,7 @@ namespace snmalloc
       }
 
       // Check we terminated traversal on a correctly aligned block
-      uint16_t start = remove_cache_friendly_offset(curr & ~1, sizeclass);
+      uint16_t start = curr & ~1;
       assert((start - offset) % size == 0);
 
       if (curr != link)

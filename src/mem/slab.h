@@ -48,13 +48,11 @@ namespace snmalloc
 
       if ((head & 1) == 0)
       {
-        void* node = pointer_offset(this, head);
+        p = pointer_offset(this, head);
 
         // Read the next slot from the memory that's about to be allocated.
-        uint16_t next = *static_cast<uint16_t*>(node);
+        uint16_t next = *static_cast<uint16_t*>(p);
         meta.head = next;
-
-        p = remove_cache_friendly_offset(node, meta.sizeclass);
       }
       else
       {
