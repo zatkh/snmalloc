@@ -358,7 +358,7 @@ namespace snmalloc
         RemoteAllocator* target = super->get_allocator();
 
         if (target == public_state())
-          small_dealloc(super, p, sizeclass);
+          small_dealloc(super, p);
         else
           remote_dealloc(target, p, sizeclass);
       }
@@ -397,7 +397,7 @@ namespace snmalloc
         RemoteAllocator* target = super->get_allocator();
 
         if (target == public_state())
-          small_dealloc(super, p, sizeclass);
+          small_dealloc(super, p);
         else
           remote_dealloc(target, p, sizeclass);
       }
@@ -439,18 +439,19 @@ namespace snmalloc
       if (size == PMSuperslab)
       {
         RemoteAllocator* target = super->get_allocator();
-        Slab* slab = Slab::get(p);
-        Metaslab& meta = super->get_meta(slab);
-
-        // Reading a remote sizeclass won't fail, since the other allocator
-        // can't reuse the slab, as we have not yet deallocated this
-        // pointer.
-        uint8_t sizeclass = meta.sizeclass;
-
-        if (super->get_allocator() == public_state())
-          small_dealloc(super, p, sizeclass);
+        if (target == public_state())
+          small_dealloc(super, p);
         else
+        {
+          Slab* slab = Slab::get(p);
+          Metaslab& meta = super->get_meta(slab);
+          // Reading a remote sizeclass won't fail, since the other allocator
+          // can't reuse the slab, as we have not yet deallocated this
+          // pointer.
+          uint8_t sizeclass = meta.sizeclass;
+
           remote_dealloc(target, p, sizeclass);
+        }
         return;
       }
       if (size == PMMediumslab)
@@ -799,14 +800,14 @@ namespace snmalloc
 
         if (super->get_kind() == Super)
         {
-          Slab* slab = Slab::get(p);
-          Metaslab& meta = super->get_meta(slab);
           if (p->target_id() == id())
           {
-            small_dealloc(super, p, meta.sizeclass);
+            small_dealloc(super, p);
           }
           else
           {
+            Slab* slab = Slab::get(p);
+            Metaslab& meta = super->get_meta(slab);
             // Queue for remote dealloc elsewhere.
             remote.dealloc(p->target_id(), p, meta.sizeclass);
           }
@@ -986,10 +987,11 @@ namespace snmalloc
       return slab->alloc<zero_mem>(sc, rsize, large_allocator.memory_provider);
     }
 
-    void small_dealloc(Superslab* super, void* p, uint8_t sizeclass)
+    void small_dealloc(Superslab* super, void* p)
     {
-#ifndef SNMALLOC_SAFE_CLIENT
       Slab* slab = Slab::get(p);
+
+#ifndef SNMALLOC_SAFE_CLIENT
       if (!slab->is_start_of_object(super, p))
       {
         error("Not deallocating start of an object");
@@ -997,16 +999,15 @@ namespace snmalloc
 #endif
 
       MEASURE_TIME(small_dealloc, 4, 16);
-      stats().sizeclass_dealloc(sizeclass);
+      stats().sizeclass_dealloc(super->get_meta(slab).sizeclass);
 
       bool was_full = super->is_full();
-      SlabList* sc = &small_classes[sizeclass];
       Superslab::Action a =
-        slab->dealloc(sc, super, p, large_allocator.memory_provider);
+        slab->dealloc(small_classes, super, p, large_allocator.memory_provider);
       if (a == Superslab::NoSlabReturn)
         return;
 
-      stats().sizeclass_dealloc_slab(sizeclass);
+      stats().sizeclass_dealloc_slab(super->get_meta(slab).sizeclass);
 
       if (a == Superslab::NoStatusChange)
         return;

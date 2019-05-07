@@ -93,7 +93,10 @@ namespace snmalloc
     // Returns true, if it alters get_status.
     template<typename MemoryProvider>
     inline typename Superslab::Action dealloc(
-      SlabList* sc, Superslab* super, void* p, MemoryProvider& memory_provider)
+      ModArray<NUM_SMALL_CLASSES, SlabList>& scs, 
+      Superslab* super, 
+      void* p, 
+      MemoryProvider& memory_provider)
     {
       Metaslab& meta = super->get_meta(this);
 
@@ -113,7 +116,7 @@ namespace snmalloc
           meta.link = index;
 
           // Push on the list of slabs for this sizeclass.
-          sc->insert(meta.get_link(this));
+          scs[meta.sizeclass].insert(meta.get_link(this));
           meta.debug_slab_invariant(is_short(), this);
         }
         else
@@ -128,7 +131,7 @@ namespace snmalloc
       else if (meta.is_unused())
       {
         // Remove from the sizeclass list and dealloc on the superslab.
-        sc->remove(meta.get_link(this));
+        scs[meta.sizeclass].remove(meta.get_link(this));
 
         if (is_short())
           return super->dealloc_short_slab(memory_provider);
@@ -138,7 +141,7 @@ namespace snmalloc
       else
       {
 #ifndef NDEBUG
-        sc->debug_check_contains(meta.get_link(this));
+        scs[meta.sizeclass].debug_check_contains(meta.get_link(this));
 #endif
 
         // Update the head and the next pointer in the free list.
