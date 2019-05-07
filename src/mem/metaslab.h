@@ -56,11 +56,9 @@ namespace snmalloc
     // When a slab has free space it will be on the has space list for
     // that size class.  We use an empty block in this slab to be the
     // doubly linked node into that size class's free list.
+    // If a slab is currently unused, then link is used to connect it to other
+    // free slabs in the superslab.
     Mod<SLAB_SIZE, uint16_t> link;
-
-    uint8_t sizeclass;
-    // Initially zero to encode the superslabs relative list of slabs.
-    uint8_t next = 0;
 
     void add_use()
     {
@@ -98,7 +96,7 @@ namespace snmalloc
       return reinterpret_cast<SlabLink*>(pointer_offset(slab, link));
     }
 
-    bool valid_head(bool is_short)
+    bool valid_head(bool is_short, uint8_t sizeclass)
     {
       size_t size = sizeclass_to_size(sizeclass);
       size_t offset = get_slab_offset(sizeclass, is_short);
@@ -110,7 +108,7 @@ namespace snmalloc
       return ((head_start - slab_start) % size) == 0;
     }
 
-    void debug_slab_invariant(bool is_short, Slab* slab)
+    void debug_slab_invariant(bool is_short, Slab* slab, uint8_t sizeclass)
     {
 #if !defined(NDEBUG) && !defined(SNMALLOC_CHEAP_CHECKS)
       size_t size = sizeclass_to_size(sizeclass);
@@ -167,7 +165,10 @@ namespace snmalloc
 #else
       UNUSED(slab);
       UNUSED(is_short);
+      UNUSED(sizeclass);
 #endif
     }
   };
+
+  static_assert(sizeof(Metaslab) == 6, "Should be 6 bytes");
 } // namespace snmalloc

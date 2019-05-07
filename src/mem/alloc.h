@@ -444,11 +444,10 @@ namespace snmalloc
         else
         {
           Slab* slab = Slab::get(p);
-          Metaslab& meta = super->get_meta(slab);
           // Reading a remote sizeclass won't fail, since the other allocator
           // can't reuse the slab, as we have not yet deallocated this
           // pointer.
-          uint8_t sizeclass = meta.sizeclass;
+          uint8_t sizeclass = super->get_sizeclass(slab);
 
           remote_dealloc(target, p, sizeclass);
         }
@@ -493,9 +492,8 @@ namespace snmalloc
       if (size == PMSuperslab)
       {
         Slab* slab = Slab::get(p);
-        Metaslab& meta = super->get_meta(slab);
 
-        uint8_t sc = meta.sizeclass;
+        uint8_t sc = super->get_sizeclass(slab);
         size_t slab_end = static_cast<size_t>(address_cast(slab) + SLAB_SIZE);
 
         return external_pointer<location>(p, sc, slab_end);
@@ -562,9 +560,7 @@ namespace snmalloc
         // Reading a remote sizeclass won't fail, since the other allocator
         // can't reuse the slab, as we have no yet deallocated this pointer.
         Slab* slab = Slab::get(p);
-        Metaslab& meta = super->get_meta(slab);
-
-        return sizeclass_to_size(meta.sizeclass);
+        return sizeclass_to_size(super->get_sizeclass(slab));
       }
       else if (size == PMMediumslab)
       {
@@ -807,9 +803,8 @@ namespace snmalloc
           else
           {
             Slab* slab = Slab::get(p);
-            Metaslab& meta = super->get_meta(slab);
             // Queue for remote dealloc elsewhere.
-            remote.dealloc(p->target_id(), p, meta.sizeclass);
+            remote.dealloc(p->target_id(), p, super->get_sizeclass(slab));
           }
         }
         else
@@ -999,7 +994,7 @@ namespace snmalloc
 #endif
 
       MEASURE_TIME(small_dealloc, 4, 16);
-      stats().sizeclass_dealloc(super->get_meta(slab).sizeclass);
+      stats().sizeclass_dealloc(super->get_sizeclass(slab));
 
       bool was_full = super->is_full();
       Superslab::Action a =
@@ -1007,7 +1002,7 @@ namespace snmalloc
       if (a == Superslab::NoSlabReturn)
         return;
 
-      stats().sizeclass_dealloc_slab(super->get_meta(slab).sizeclass);
+      stats().sizeclass_dealloc_slab(super->get_sizeclass(slab));
 
       if (a == Superslab::NoStatusChange)
         return;

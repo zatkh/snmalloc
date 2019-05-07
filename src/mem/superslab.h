@@ -38,8 +38,13 @@ namespace snmalloc
     // plus 1 for the short slab. i.e. using 3 slabs and the
     // short slab would be 6 + 1 = 7
     uint16_t used;
+    /// Contains the sizeclasses for each slab in this superslab.
+    ModArray<SLAB_COUNT, uint8_t> sizeclasses;
 
     ModArray<SLAB_COUNT, Metaslab> meta;
+
+    static_assert(
+      sizeof(meta) == SLAB_COUNT * 6, "Check no padding introduced");
 
     // Used size_t as results in better code in MSVC
     size_t slab_to_index(Slab* slab)
@@ -101,7 +106,7 @@ namespace snmalloc
         auto curr = head;
         for (size_t i = 0; i < SLAB_COUNT - used - 1; i++)
         {
-          curr = (curr + meta[curr].next + 1) & (SLAB_COUNT - 1);
+          curr = (curr + meta[curr].link + 1) & (SLAB_COUNT - 1);
         }
         assert(curr == 0);
 
@@ -153,6 +158,11 @@ namespace snmalloc
       return meta[slab_to_index(slab)];
     }
 
+    uint8_t get_sizeclass(Slab* slab)
+    {
+      return sizeclasses[slab_to_index(slab)];
+    }
+
     template<typename MemoryProvider>
     Slab* alloc_short_slab(uint8_t sizeclass, MemoryProvider& memory_provider)
     {
@@ -160,7 +170,7 @@ namespace snmalloc
         return alloc_slab(sizeclass, memory_provider);
 
       meta[0].head = get_slab_offset(sizeclass, true);
-      meta[0].sizeclass = sizeclass;
+      sizeclasses[0] = sizeclass;
       meta[0].link = SLABLINK_INDEX;
 
       if constexpr (decommit_strategy == DecommitAll)
@@ -180,10 +190,10 @@ namespace snmalloc
       Slab* slab = pointer_cast<Slab>(
         address_cast(this) + (static_cast<size_t>(h) << SLAB_BITS));
 
-      uint8_t n = meta[h].next;
+      uint8_t n = meta[h].link & (SLAB_COUNT - 1);
 
       meta[h].head = get_slab_offset(sizeclass, false);
-      meta[h].sizeclass = sizeclass;
+      sizeclasses[h] = sizeclass;
       meta[h].link = SLABLINK_INDEX;
 
       head = h + n + 1;
@@ -205,8 +215,8 @@ namespace snmalloc
       uint8_t index = static_cast<uint8_t>(slab_to_index(slab));
       uint8_t n = head - index - 1;
 
-      meta[index].sizeclass = 0;
-      meta[index].next = n;
+      sizeclasses[index] = 0;
+      meta[index].link = n;
       head = index;
       bool was_almost_full = is_almost_full();
       used -= 2;

@@ -25,6 +25,12 @@ namespace snmalloc
       return super->get_meta(this);
     }
 
+    uint8_t get_sizeclass()
+    {
+      Superslab* super = Superslab::get(this);
+      return super->get_sizeclass(this);
+    }
+
     SlabLink* get_link()
     {
       return get_meta().get_link(this);
@@ -37,8 +43,8 @@ namespace snmalloc
       Metaslab& meta = get_meta();
       uint16_t head = meta.head;
 
-      assert(rsize == sizeclass_to_size(meta.sizeclass));
-      meta.debug_slab_invariant(is_short(), this);
+      assert(rsize == sizeclass_to_size(get_sizeclass()));
+      meta.debug_slab_invariant(is_short(), this, get_sizeclass());
       assert(sc->get_head() == (SlabLink*)((size_t)this + meta.link));
       assert(!meta.is_full());
 
@@ -69,7 +75,7 @@ namespace snmalloc
       if (meta.is_full())
         sc->pop();
 
-      meta.debug_slab_invariant(is_short(), this);
+      meta.debug_slab_invariant(is_short(), this, get_sizeclass());
 
       if constexpr (zero_mem == YesZero)
       {
@@ -84,24 +90,23 @@ namespace snmalloc
 
     bool is_start_of_object(Superslab* super, void* p)
     {
-      Metaslab& meta = super->get_meta(this);
       return is_multiple_of_sizeclass(
-        sizeclass_to_size(meta.sizeclass),
+        sizeclass_to_size(super->get_sizeclass(this)),
         address_cast(this) + SLAB_SIZE - address_cast(p));
     }
 
     // Returns true, if it alters get_status.
     template<typename MemoryProvider>
     inline typename Superslab::Action dealloc(
-      ModArray<NUM_SMALL_CLASSES, SlabList>& scs, 
-      Superslab* super, 
-      void* p, 
+      ModArray<NUM_SMALL_CLASSES, SlabList>& scs,
+      Superslab* super,
+      void* p,
       MemoryProvider& memory_provider)
     {
       Metaslab& meta = super->get_meta(this);
 
       bool was_full = meta.is_full();
-      meta.debug_slab_invariant(is_short(), this);
+      meta.debug_slab_invariant(is_short(), this, get_sizeclass());
       meta.sub_use();
 
       if (was_full)
@@ -112,12 +117,12 @@ namespace snmalloc
           // Update the head and the sizeclass link.
           uint16_t index = pointer_to_index(p);
           meta.head = index;
-          assert(meta.valid_head(is_short()));
+          assert(meta.valid_head(is_short(), super->get_sizeclass(this)));
           meta.link = index;
 
           // Push on the list of slabs for this sizeclass.
-          scs[meta.sizeclass].insert(meta.get_link(this));
-          meta.debug_slab_invariant(is_short(), this);
+          scs[get_sizeclass()].insert(meta.get_link(this));
+          meta.debug_slab_invariant(is_short(), this, get_sizeclass());
         }
         else
         {
@@ -131,7 +136,7 @@ namespace snmalloc
       else if (meta.is_unused())
       {
         // Remove from the sizeclass list and dealloc on the superslab.
-        scs[meta.sizeclass].remove(meta.get_link(this));
+        scs[get_sizeclass()].remove(meta.get_link(this));
 
         if (is_short())
           return super->dealloc_short_slab(memory_provider);
@@ -141,7 +146,7 @@ namespace snmalloc
       else
       {
 #ifndef NDEBUG
-        scs[meta.sizeclass].debug_check_contains(meta.get_link(this));
+        scs[get_sizeclass()].debug_check_contains(meta.get_link(this));
 #endif
 
         // Update the head and the next pointer in the free list.
@@ -150,11 +155,11 @@ namespace snmalloc
 
         // Set the head to the memory being deallocated.
         meta.head = current;
-        assert(meta.valid_head(is_short()));
+        assert(meta.valid_head(is_short(), super->get_sizeclass(this)));
 
         // Set the next pointer to the previous head.
         *static_cast<uint16_t*>(p) = head;
-        meta.debug_slab_invariant(is_short(), this);
+        meta.debug_slab_invariant(is_short(), this, get_sizeclass());
       }
       return Superslab::NoSlabReturn;
     }
