@@ -45,13 +45,9 @@ namespace snmalloc
     // It either terminates with a bump ptr, or if all the space is in
     // the free list, then the last block will be also referenced by
     // link.
-    // Note that, in the case that this is the first block in the size
-    // class list, where all the unused memory is in the free list,
-    // then the last block can both be interpreted as a final bump
-    // pointer entry, and the first entry in the doubly linked list.
-    // The terminal value in the free list, and the terminal value in
-    // the SlabLink previous field will alias. The SlabLink uses ~0 for
-    // its terminal value to be a valid terminal bump ptr.
+    // Note that, the first entry in a slab is never bump allocated
+    // but is used for the link. This means that 1 represents the fully
+    // bump allocated slab.
     Mod<SLAB_SIZE, uint16_t> head;
     // When a slab has free space it will be on the has space list for
     // that size class.  We use an empty block in this slab to be the
@@ -82,13 +78,14 @@ namespace snmalloc
 
     bool is_full()
     {
-      return (head & 2) != 0;
+      return link == 1;
     }
 
     void set_full()
     {
       assert(head == 1);
-      head = static_cast<uint16_t>(~0);
+      assert(link != 1);
+      link = 1;
     }
 
     SlabLink* get_link(Slab* slab)
@@ -138,27 +135,30 @@ namespace snmalloc
         // Account for free elements in free list
         accounted_for += size;
         assert(SLAB_SIZE >= accounted_for);
-        // We are not guaranteed to hit a bump ptr unless
-        // we are the top element on the size class, so treat as
-        // a list segment.
-        if (curr == link)
-          break;
+        // We should never reach the link node in the free list.
+        assert(curr != link);
+
         // Iterate bump/free list segment
         curr = *reinterpret_cast<uint16_t*>(pointer_offset(slab, curr));
       }
 
-      // Check we terminated traversal on a correctly aligned block
-      uint16_t start = curr & ~1;
-      assert((start - offset) % size == 0);
-
-      if (curr != link)
+      if (curr != 1)
       {
-        // The link should be at the special end location as we
-        // haven't completely filled this block at any point.
-        assert(link == SLABLINK_INDEX);
+        // Check we terminated traversal on a correctly aligned block
+        uint16_t start = curr & ~1;
+        assert((start - offset) % size == 0);
+
         // Account for to be bump allocated space
         accounted_for += SLAB_SIZE - (curr - 1);
+
+        // The link should be the first allocation as we
+        // haven't completely filled this block at any point.
+        assert(link == (get_slab_offset(sizeclass, is_short) - 1));
       }
+
+      assert(link != 1);
+      // Add the link node.
+      accounted_for += size;
 
       // All space accounted for
       assert(SLAB_SIZE == accounted_for);
