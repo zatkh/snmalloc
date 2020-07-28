@@ -1,7 +1,17 @@
 cmake_minimum_required(VERSION 3.8)
+
+option(ENABLE_WASI "enable snmalloc for wasi environment" On)
+if(ENABLE_WASI)
+  set( COMPILER_BIN /usr/local/vwasm/toolchain/bin )
+  set( WASM_SYSROOT /usr/local/vwasm/llvm-sysroot )
+
+  set( CMAKE_C_COMPILER ${COMPILER_BIN}/clang CACHE PATH "clang" FORCE )
+  set( CMAKE_CXX_COMPILER ${COMPILER_BIN}/clang++ CACHE PATH "clang++" FORCE )
+  set(CMAKE_C_COMPILER_WORKS 1)
+  set(CMAKE_CXX_COMPILER_WORKS 1)
+endif()
+
 project(snmalloc)
-
-
 
 if (NOT CMAKE_BUILD_TYPE)
   message(STATUS "No build type selected, default to: Release")
@@ -20,7 +30,6 @@ option(SNMALLOC_RUST_SUPPORT "Build static library for rust" OFF)
 option(SNMALLOC_STATIC_LIBRARY   "Build static libraries" ON)
 option(SNMALLOC_QEMU_WORKAROUND "Disable using madvise(DONT_NEED) to zero memory on Linux" Off)
 option(SNMALLOC_OPTIMISE_FOR_CURRENT_MACHINE "Compile for current machine architecture" Off)
-option(ENABLE_WASI "enable snmalloc for wasi environment" ON)
 
 set(CACHE_FRIENDLY_OFFSET OFF CACHE STRING "Base offset to place linked-list nodes.")
 set(SNMALLOC_STATIC_LIBRARY_PREFIX "sn_" CACHE STRING "Static library function prefix")
@@ -28,11 +37,6 @@ set(SNMALLOC_STATIC_LIBRARY_PREFIX "sn_" CACHE STRING "Static library function p
 
 if(ENABLE_WASI)
 
-set( COMPILER_BIN /usr/local/vwasm/toolchain/bin)
-set( WASM_SYSROOT /usr/local/vwasm/llvm-sysroot)
-
-set( CMAKE_C_COMPILER ${COMPILER_BIN}/clang CACHE PATH "clang" FORCE )
-set( CMAKE_CXX_COMPILER ${COMPILER_BIN}/clang++ CACHE PATH "clang++" FORCE )
 set( CMAKE_AR ${COMPILER_BIN}/llvm-ar CACHE PATH "llvm-ar" FORCE )
 set( CMAKE_LINKER ${COMPILER_BIN}/wasm-ld CACHE PATH "wasm-ld" FORCE )
 set( CMAKE_RANLIB ${COMPILER_BIN}/llvm-ranlib CACHE PATH "llvm-ranlib" FORCE )
