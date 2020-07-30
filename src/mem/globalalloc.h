@@ -90,7 +90,7 @@ namespace snmalloc
           alloc = Parent::extract(alloc);
         }
 
-        restore(first, last);
+        this->restore(first, last);
       }
 #endif
     }
